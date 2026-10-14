@@ -1,0 +1,21 @@
+name: FieldWatch
+options:
+  bundleIdPrefix: com.islandview
+targets:
+  FieldWatch:
+    type: application
+    platform: watchOS
+    deploymentTarget: "10.0"
+    sources:
+      - path: .
+        excludes:
+          - README.md
+          - project.yml
+          - .github
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.islandview.fieldwatch
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "Registrar puntos de campo para Island View"
+        SWIFT_VERSION: "5.0"
+        CODE_SIGNING_ALLOWED: NO
