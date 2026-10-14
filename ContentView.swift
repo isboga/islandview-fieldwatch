@@ -5,6 +5,7 @@ import CoreLocation
 struct ContentView: View {
     @EnvironmentObject private var tracker: FieldTracker
     @State private var note = ""
+    @State private var areaUnit: AreaUnit = .hectares
     @State private var camera: MapCameraPosition = .automatic
     @State private var followGPS = true
 
@@ -51,8 +52,11 @@ struct ContentView: View {
                         tracker.record(note)
                         note = ""
                     }.disabled(tracker.location == nil)
+                    Picker("Unidad", selection: $areaUnit) {
+                        ForEach(AreaUnit.allCases) { unit in Text(unit.rawValue).tag(unit) }
+                    }
                     if tracker.points.count >= 3 {
-                        Text("Área aprox.: \(tracker.polygonAreaSquareMeters / 10000, specifier: "%.4f") ha")
+                        Text("Área aprox.: \(areaUnit.convert(tracker.polygonAreaSquareMeters), specifier: "%.4f") \(areaUnit.rawValue)")
                             .font(.caption)
                         Text("Perímetro: \(tracker.polygonPerimeterMeters, specifier: "%.1f") m")
                             .font(.caption)
