@@ -1,0 +1,19 @@
+name: Build watchOS
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '**.swift'
+      - 'project.yml'
+      - '.github/workflows/build.yml'
+jobs:
+  simulator:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate
+        run: xcodegen generate
+      - name: Compile
+        run: xcodebuild -project FieldWatch.xcodeproj -scheme FieldWatch -sdk watchsimulator -destination 'generic/platform=watchOS Simulator' CODE_SIGNING_ALLOWED=NO build
