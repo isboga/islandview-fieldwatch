@@ -20,6 +20,16 @@ struct ContentView: View {
                         tracker.record(note)
                         note = ""
                     }.disabled(tracker.location == nil)
+                    if tracker.points.count >= 3 {
+                        Text("Área: \(tracker.polygonAreaSquareMeters / 10000, specifier: "%.4f") ha")
+                            .font(.caption)
+                        Text("Perímetro: \(tracker.polygonPerimeterMeters, specifier: "%.1f") m")
+                            .font(.caption)
+                    }
+                    ShareLink(item: tracker.geoJSON, subject: Text("FieldWatch GeoJSON"),
+                              message: Text("Datos SIG de Island View")) {
+                        Label("Compartir GeoJSON", systemImage: "square.and.arrow.up")
+                    }
                     NavigationLink("Puntos: \(tracker.points.count)") {
                         List(tracker.points) { point in
                             VStack(alignment: .leading) {
