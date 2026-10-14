@@ -5,6 +5,7 @@ import CoreLocation
 struct ContentView: View {
     @EnvironmentObject private var tracker: FieldTracker
     @State private var note = ""
+    @State private var editedProject = ""
     @State private var areaUnit: AreaUnit = .hectares
     @State private var camera: MapCameraPosition = .automatic
     @State private var followGPS = true
@@ -19,6 +20,9 @@ struct ContentView: View {
                 VStack(spacing: 8) {
                     Text("ISLAND VIEW").font(.caption2).bold()
                     Text("FieldWatch · SIG").font(.headline)
+                    TextField("Proyecto", text: $editedProject)
+                    Button("Guardar nombre") { tracker.renameProject(editedProject) }
+                    Text("Archivados: \(tracker.savedSurveys.count)").font(.caption2)
                     Map(position: $camera) {
                         ForEach(Array(tracker.points.enumerated()), id: \.element.id) { index, point in
                             Annotation("P\(index + 1)",
@@ -52,6 +56,15 @@ struct ContentView: View {
                         tracker.record(note)
                         note = ""
                     }.disabled(tracker.location == nil)
+                    if !tracker.isClosed {
+                        Button("Deshacer vértice") { tracker.undoVertex() }
+                            .disabled(tracker.points.isEmpty)
+                        Button("Cerrar polígono") { tracker.closePolygon() }
+                            .disabled(tracker.points.count < 3)
+                    } else {
+                        Text("Polígono finalizado").font(.caption)
+                    }
+                    Button("Nuevo levantamiento") { tracker.newSurvey() }
                     Picker("Unidad", selection: $areaUnit) {
                         ForEach(AreaUnit.allCases) { unit in Text(unit.rawValue).tag(unit) }
                     }
@@ -60,6 +73,11 @@ struct ContentView: View {
                             .font(.caption)
                         Text("Perímetro: \(tracker.polygonPerimeterMeters, specifier: "%.1f") m")
                             .font(.caption)
+                    }
+                    if let file = tracker.geoJSONFile {
+                        ShareLink(item: file, preview: SharePreview("FieldWatch GeoJSON")) {
+                            Label("Exportar archivo", systemImage: "square.and.arrow.up")
+                        }
                     }
                     ShareLink(item: tracker.geoJSON) {
                         Label("Compartir GeoJSON", systemImage: "square.and.arrow.up")
@@ -75,7 +93,7 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("Mapa SIG")
-            .onAppear { tracker.refresh() }
+            .onAppear { editedProject = tracker.projectName; tracker.refresh() }
             .onChange(of: tracker.location?.timestamp) { _, _ in
                 guard followGPS, let loc = tracker.location else { return }
                 camera = .region(MKCoordinateRegion(center: loc.coordinate,
