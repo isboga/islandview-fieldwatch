@@ -15,6 +15,65 @@ struct SurveyPoint: Identifiable, Codable {
     @Published var location: CLLocation?
     @Published var points: [SurveyPoint] = []
     @Published var message = "Solicita GPS"
+    @Published var projectName = "Proyecto 1"
+    @Published var isClosed = false
+    @Published var savedSurveys: [SurveyArchive] = []
+    struct SurveyArchive: Codable {
+        var name: String
+        var vertices: [SurveyPoint]
+    }
+    private struct Workspace: Codable {
+        var name: String
+        var closed: Bool
+        var archives: [SurveyArchive]
+    }
+    private var workspaceURL: URL {
+        file.deletingLastPathComponent().appendingPathComponent("workspace.json")
+    }
+    private func saveWorkspace() {
+        let state = Workspace(name: projectName, closed: isClosed, archives: savedSurveys)
+        if let data = try? JSONEncoder().encode(state) {
+            try? data.write(to: workspaceURL, options: .atomic)
+        }
+    }
+    func renameProject(_ value: String) {
+        projectName = value.isEmpty ? "Proyecto 1" : value
+        saveWorkspace()
+    }
+    func closePolygon() {
+        guard points.count >= 3 else { return }
+        isClosed = true
+        saveWorkspace()
+        message = "Polígono cerrado"
+    }
+    func undoVertex() {
+        guard !isClosed, !points.isEmpty else { return }
+        points.removeLast()
+        savePoints()
+        message = "Vértice eliminado"
+    }
+    func newSurvey() {
+        if !points.isEmpty {
+            savedSurveys.append(SurveyArchive(name: projectName, vertices: points))
+        }
+        points = []
+        isClosed = false
+        savePoints()
+        saveWorkspace()
+        message = "Nuevo levantamiento"
+    }
+    private func savePoints() {
+        if let data = try? JSONEncoder().encode(points) {
+            try? data.write(to: file, options: .atomic)
+        }
+    }
+    var geoJSONFile: URL? {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("fieldwatch.geojson")
+        do {
+            try geoJSON.write(to: url, atomically: true, encoding: .utf8)
+            return url
+        } catch { return nil }
+    }
     private let manager = CLLocationManager()
     private var file: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("points.json")
@@ -23,6 +82,12 @@ struct SurveyPoint: Identifiable, Codable {
         super.init()
         if let data = try? Data(contentsOf: file),
            let stored = try? JSONDecoder().decode([SurveyPoint].self, from: data) { points = stored }
+        if let data = try? Data(contentsOf: workspaceURL),
+           let state = try? JSONDecoder().decode(Workspace.self, from: data) {
+            projectName = state.name
+            isClosed = state.closed
+            savedSurveys = state.archives
+        }
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBest
     }
@@ -47,12 +112,10 @@ struct SurveyPoint: Identifiable, Codable {
         message = error.localizedDescription
     }
     func record(_ note: String) {
-        guard let loc = location else { return }
+        guard !isClosed, let loc = location else { return }
         points.append(SurveyPoint(latitude: loc.coordinate.latitude, longitude: loc.coordinate.longitude,
                                   accuracyMeters: loc.horizontalAccuracy, recordedAt: loc.timestamp, note: note))
-        if let data = try? JSONEncoder().encode(points) {
-            try? data.write(to: file, options: .atomic)
-        }
+        savePoints()
         message = "Punto guardado"
     }
 
@@ -96,13 +159,20 @@ struct SurveyPoint: Identifiable, Codable {
                             "timestamp": ISO8601DateFormatter().string(from: p.recordedAt)]]
         }
         var features = pointFeatures
-        if points.count >= 3 {
+        if points.count >= 3 && isClosed {
             let ring = points.map { [$0.longitude, $0.latitude] } +
                        [[points[0].longitude, points[0].latitude]]
             features.append(["type": "Feature",
                              "geometry": ["type": "Polygon", "coordinates": [ring]],
                              "properties": ["area_m2": polygonAreaSquareMeters,
                                             "perimeter_m": polygonPerimeterMeters]])
+        }
+        for survey in savedSurveys where survey.vertices.count >= 3 {
+            let ring = survey.vertices.map { [$0.longitude, $0.latitude] }
+            let closedRing = ring + [ring[0]]
+            features.append(["type": "Feature",
+                             "geometry": ["type": "Polygon", "coordinates": [closedRing]],
+                             "properties": ["project": survey.name]])
         }
         let collection: [String: Any] = ["type": "FeatureCollection", "features": features]
         guard let data = try? JSONSerialization.data(withJSONObject: collection,
